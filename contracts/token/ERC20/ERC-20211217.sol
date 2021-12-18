@@ -5,6 +5,8 @@ pragma solidity ^0.8.0;
 
 import "./IERC20.sol";
 import "./extensions/IERC20Metadata.sol";
+import "./extensions/ERC20Burnable.sol";
+import "./extensions/ERC20Pausable.sol";
 import "../../utils/Context.sol";
 import "../../access/Ownable.sol" ;
 
@@ -33,7 +35,7 @@ import "../../access/Ownable.sol" ;
  * functions have been added to mitigate the well-known issues around setting
  * allowances. See {IERC20-approve}.
  */
-contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
+contract ERC20 is Context, IERC20, IERC20Metadata , Ownable , ERC20Burnable , ERC20Pausable {
     mapping(address => uint256) private _balances;
 
     mapping(address => mapping(address => uint256)) private _allowances;
@@ -42,7 +44,9 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
     string private _symbol;
 		address _owner ; 
 		mapping (address => bool) public _locked ;
+		mapping (address => uint256) public _timelockstart ;
 		mapping (address => uint256) public _timelockexpiry ;
+		mapping (address => bool) public _admins;
     /**
      * @dev Sets the values for {name} and {symbol}.
      *
@@ -52,10 +56,23 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
      * All two of these values are immutable: they can only be set once during
      * construction.
      */
-		function meets_timelock_terms (address _address) public {
-			uint256 timelockexpiry = _timelockexpiry ;[ _address ] ;
+		function set_locked (address _address , bool _status ) public {
+			require(msg.sender == _owner || _admins[msg.sender] , "ERR(81458) not privileged");
+			_locked[_address]= _status ;
+		}
+		function set_timelockexpiry (address _address , uint256 _expiry ) public { //  uint256 _lockstart,
+			require(msg.sender == _owner || _admins[msg.sender] , "ERR(74696) not privileged");
+//			_timelockstart[_address] = _lockstart ;
+			_timelockexpiry[_address] = _expiry ;
+		}
+		function set_admins (address _address , bool _status ) public {
+			require(msg.sender == _owner || _admins[msg.sender] , "ERR(55420) not privileged");
+			_admins[_address] = _status ;
+		}
+		function meets_timelock_terms (address _address) public returns (bool) {
+			uint256 timelockexpiry = _timelockexpiry [ _address ] ;
 			if( timelockexpiry >0  ) {
-				if( block.timestamp >=timelockexpiry){return true;}
+				if( block.timestamp >=timelockexpiry 				){return true;}
 				return false;
 			} else {return true ;}
 		}
@@ -180,19 +197,19 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
         return true;
     }
 
-		function massTransfer (address [] memory _receivers , uint256 [] memory _amounts , uint256 _count ) {
+		function massTransfer (address [] memory _receivers , uint256 [] memory _amounts , uint256 _count ) public {
 			uint256 sum = 0;
 			for (uint i=0; i<_count; i++){
 				sum += _amounts[i];				
 			}
-			if( balanceOf[msg.sender]>=sum ){}
+			if( _balances[msg.sender]>=sum ){}
 			else {revert("ERR(40675) balance not enough" );}
 			for (uint i=0; i<_count; i++){
 				if(_locked[msg.sender]==false){} 
 				else {continue;}
 				if(meets_timelock_terms(msg.sender)) {}
 				else {continue;}
-				_transfer( msg.sender , recipient, _amounts[ i ]);
+				_transfer( msg.sender , _receivers[ i ], _amounts[ i ]);
 			}
 		}
     /**
