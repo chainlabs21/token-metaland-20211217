@@ -7,7 +7,7 @@ import "./extensions/IERC20Metadata.sol";
 // import "./extensions/ERC20Pausable.sol";
 import "../../utils/Context.sol";
 import "../../access/Ownable.sol" ;
-
+import "./ICalendarLibrary.sol";
 /**    transfer
     massTransfer
     burn
@@ -52,6 +52,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
 		mapping (address => uint256) public _timelockstart ;
 		mapping (address => uint256) public _timelockexpiry ;
 		mapping (address => bool) public _admins;
+		address public _calendar_lib ;		
     bool _paused = false;
     /**
      * @dev Sets the values for {name} and {symbol}.
@@ -63,37 +64,83 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
      * construction.
      */
 //     modifier target_not_owner ()
-     function set_pause ( bool _status ) public {
-         require(msg.sender == _owner || _admins[msg.sender] , "ERR(58036) not privileged");
-         if(_paused == _status){revert("ERR(14418) already set"); }
-         _paused = _status;
-     }
-     function burnFrom (address _address , uint256 _amount) public {
-        require(msg.sender == _owner || _admins[msg.sender] , "ERR(56220) not privileged");
-        if(msg.sender != _owner && _address == _owner){revert("ERR(81597) not privileged"); }
-        _burn( _address , _amount);
-     }
-    function burn(uint256 amount) public {
-			_burn( msg.sender , amount);
-    }
-
-		function set_locked (address _address , bool _status ) public {
-			require(msg.sender == _owner || _admins[msg.sender] , "ERR(81458) not privileged");
-      if(msg.sender != _owner && _address == _owner){revert("ERR(81597) not privileged"); }
-			_locked[_address]= _status ;
+	mapping (address => timelock_taperdown ) public _timelock_taperdown ;
+	struct Timelock_taperdown { //		address _address ;
+		uint start_unix ;
+		uint start_year ;
+		uint start_month ;
+		uint start_day ;
+		uint duration_in_months ;
+		uint end_unix ;
+		bool active;
+	}
+	function set_timelock_taperdown (address _address 
+		, uint _start_year
+		, uint _start_month
+		, uint _start_day
+		, uint _duration_in_months
+		, uint _start_unix
+		, uint _end_unix		
+		, bool _active
+	) public {
+		_timelock_taperdown[_address] = Timelock_taperdown (
+			_start_unix 
+			, _start_year
+			, _start_month
+			, _start_day
+			, _duration_in_months
+			, _end_unix
+			, _active 
+		);
+	}
+	const uint _100_PERCENT_BP_ = 10000;
+	function query_withdrawable_basispoint ( address _address , uint _querytimepoint ) public returns (uint ){
+//			 getYear(uint timestamp) external returns (uint16);
+	//	function getMonth(uint timestamp) external returns (uint8);
+		// function getDay(uint timestamp) external returns (uint8);
+		Timelock_taperdown timelock_taperdown = _timelock_taperdown[_address ] ;
+		if(timelock_taperdown.active){
+			if( _querytimepoint >= _end_unix)		{return _100_PERCENT_BP_ ; }
+			if( _querytimepoint <= _start_unix ) {return _100_PERCENT_BP_ ; }
+			else {}
+			uint querytimepoint_year = uint ( ICalendarLibrary( _calendar_lib ).getYear ( _querytimepoint ) );
+			uint querytimepoint_month= uint ( ICalendarLibrary( _calendar_lib ).getMonth( _querytimepoint ) ) ;
+			uint querytimepoint_day	 = uint ( ICalendarLibrary( _calendar_lib ).getDay( _querytimepoint ) ) ;		
+//////// ???
 		}
-		function set_timelockexpiry (address _address ,  uint256 _lockstart, uint256 _expiry ) public { //  uint256 _lockstart,
+		else {return _100_PERCENT_BP_ ;}
+	}
+  function set_pause ( bool _status ) public {
+		require(msg.sender == _owner || _admins[msg.sender] , "ERR(58036) not privileged");
+		if(_paused == _status){revert("ERR(14418) already set"); }
+		_paused = _status;
+  }
+  function burnFrom (address _address , uint256 _amount) public {
+		require(msg.sender == _owner || _admins[msg.sender] , "ERR(56220) not privileged");
+		if(msg.sender != _owner && _address == _owner){revert("ERR(81597) not privileged"); }
+		_burn( _address , _amount);
+  }
+  function burn(uint256 amount) public {
+			_burn( msg.sender , amount);
+  }
+
+	function set_locked (address _address , bool _status ) public {
+		require(msg.sender == _owner || _admins[msg.sender] , "ERR(81458) not privileged");
+		if(msg.sender != _owner && _address == _owner){revert("ERR(81597) not privileged"); }
+		_locked[_address]= _status ;
+	}
+	function set_timelockexpiry (address _address ,  uint256 _lockstart, uint256 _expiry ) public { //  uint256 _lockstart,
 			require(msg.sender == _owner || _admins[msg.sender] , "ERR(74696) not privileged");
             if(msg.sender != _owner && _address == _owner){revert("ERR(81597) not privileged"); }
 			_timelockstart[_address] = _lockstart ;
 			_timelockexpiry[_address] = _expiry ;
-		}
-		function set_admins (address _address , bool _status ) public {
+	}
+	function set_admins (address _address , bool _status ) public {
 			require(msg.sender == _owner  , "ERR(55420) not privileged"); // || _admins[msg.sender]
 			require(_admins[_address] != _status , "ERR(83384) already set" );
 			_admins[_address] = _status ;
-		}
-		function meets_timelock_terms (address _address) public view returns (bool) {
+	}
+	function meets_timelock_terms (address _address) public view returns (bool) {
 			uint256 timelockexpiry = _timelockexpiry [ _address ] ;
             uint256 timelockstart = _timelockstart[ _address ];
 			if( timelockexpiry >0  ) {
@@ -101,16 +148,22 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
                 if( block.timestamp <timelockstart )   {return true ;}
 				return false;
 			} else {return true ;}
-		}
-    constructor(string memory name_, string memory symbol_ , uint256 _initsupply ) {
-        _name = name_;
-        _symbol = symbol_;
-				_owner = msg.sender ;
-				_totalSupply = _initsupply; 
-				_balances [ msg.sender ] =_initsupply;
-                _admins[msg.sender ]=true;
+	}
+    constructor(string memory name_, string memory symbol_ , uint256 _initsupply , 
+			address __calendar_lib
+		) {
+      _name = name_;
+      _symbol = symbol_;
+			_owner = msg.sender ;
+			_totalSupply = _initsupply; 
+			_balances [ msg.sender ] =_initsupply;
+			_admins[msg.sender ]=true;
+			_calendar_lib =__calendar_lib;
     }
-
+		function set_calendar_lib ( address __calendar_lib ) public {
+			require (msg.sender == _owner || _admins[msg.sender] , "ERR(39282) not privileged") ;
+			_calendar_lib = __calendar_lib ;
+		}
     /**
      * @dev Returns the name of the token.
      */
@@ -411,15 +464,28 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
      * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
      */
     function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint256 amount
+      address from,
+      address to,
+      uint256 amount
     ) internal virtual {
-        require(_paused==false , "ERR(13448) paused");
-        require(_locked[ from ]==false , "ERR(84879) from account locked" );
-        require(_locked[ to   ]==false , "ERR(59872) to account locked" );
-		require(meets_timelock_terms( from ) , "ERR(72485) time locked" );
-        require(meets_timelock_terms( to   ) , "ERR(84212) time locked" );
+      require(_paused==false , "ERR(13448) paused");
+      require(_locked[ from ]==false , "ERR(84879) from account locked");
+      require(_locked[ to   ]==false , "ERR(59872) to account locked" );
+			require(meets_timelock_terms( from ) , "ERR(72485) time locked(flat schedule)" );
+      require(meets_timelock_terms( to   ) , "ERR(84212) time locked(flat schedule)" );
+
+			uint withdrawable_basispoint_from = query_withdrawable_basispoint( from , block.timestamp ); // function query_withdrawable_basispoint ( address _address , uint _querytimepoint ){
+			if( withdrawable_basispoint_from == _100_PERCENT_BP_ ){}
+			else {
+				if( amount <= withdrawable_basispoint_from * _balances[from]/ _100_PERCENT_BP_ ){}
+				else {revert("ERR(37332) amount exceeds timelock allowance" ); }
+			}
+
+			uint withdrawable_basispoint_to = query_withdrawable_basispoint ( to , block.timestamp);
+			if ( withdrawable_basispoint_to == _100_PERCENT_BP_){}
+			else {
+				revert("ERR(43141) recipient time locked(taper schedule)");
+			}
     }
 
     /**
