@@ -40,7 +40,7 @@ import "./ICalendarLibrary.sol";
  * functions have been added to mitigate the well-known issues around setting
  * allowances. See {IERC20-approve}.
  */
-contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
+contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
     mapping(address => uint256) public _balances;
 
     mapping(address => mapping(address => uint256)) public _allowances;
@@ -64,7 +64,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
      * construction.
      */
 //     modifier target_not_owner ()
-	mapping (address => timelock_taperdown ) public _timelock_taperdown ;
+	mapping (address => Timelock_taperdown ) public _timelock_taperdown ;
 	struct Timelock_taperdown { //		address _address ;
 		uint start_unix ;
 		uint start_year ;
@@ -86,8 +86,8 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
 		, uint _end_unix
 		, bool _active
 	) public {
-		Timelock_taperdown timelock_taperdown = _timelock_taperdown[_address];
-		if( timelock_taperdown._start_unix > 0 ){ //			_timelock_taperdown[_address] = 
+		Timelock_taperdown memory timelock_taperdown = _timelock_taperdown[_address];
+		if( timelock_taperdown.start_unix > 0 ){ //			_timelock_taperdown[_address] = 
 		} else { uint256 current_balance = _balances[_address ] ;
 			_timelock_taperdown[_address] = Timelock_taperdown (
 				_start_unix 
@@ -108,17 +108,25 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
 //			 getYear(uint timestamp) external returns (uint16);
 	//	function getMonth(uint timestamp) external returns (uint8);
 		// function getDay(uint timestamp) external returns (uint8);
-		Timelock_taperdown timelock_taperdown = _timelock_taperdown[_address ] ;
+		Timelock_taperdown memory timelock_taperdown = _timelock_taperdown[_address ] ;
 		if(timelock_taperdown.active) {
-			if( _querytimepoint >= _end_unix)		{return _100_PERCENT_BP_ ; }
-			if( _querytimepoint <= _start_unix ) {return _100_PERCENT_BP_ ; }
+			if( _querytimepoint >= timelock_taperdown.end_unix)		{return _100_PERCENT_BP_ ; }
+			if( _querytimepoint <= timelock_taperdown.start_unix ) {return _100_PERCENT_BP_ ; }
 			else {}
-			int querytimepoint_year = int ( ICalendarLibrary( _calendar_lib ).getYear ( _querytimepoint ) ); // ???
-			int querytimepoint_month= int ( ICalendarLibrary( _calendar_lib ).getMonth( _querytimepoint ) ) ; // ???
-			int querytimepoint_day	 = int ( ICalendarLibrary( _calendar_lib ).getDay( _querytimepoint ) ) ;		 // ???
-			int month_lapse = 12 * (querytimepoint_year - (int)(timelock_taperdown.start_year ) )
-				+ (querytimepoint_month - (int)(timelock_taperdown.start_month)  )
-				+ (querytimepoint_day - (int)(timelock_taperdown.start_day) >=0 ? 0 : -1 ) ;
+//			uint querytimepoint_year = uint ( ICalendarLibrary( _calendar_lib ).getYear ( _querytimepoint ) ); // ???
+//			uint querytimepoint_month= uint ( ICalendarLibrary( _calendar_lib ).getMonth( _querytimepoint ) ) ; // ???
+//			uint querytimepoint_day	 = uint ( ICalendarLibrary( _calendar_lib ).getDay( _querytimepoint ) ) ;		 // ???
+			uint querytimepoint_year = ( ICalendarLibrary( _calendar_lib ).getYear ( _querytimepoint ) ); // ???
+			uint querytimepoint_month= ( ICalendarLibrary( _calendar_lib ).getMonth( _querytimepoint ) ) ; // ???
+			uint querytimepoint_day	 = ( ICalendarLibrary( _calendar_lib ).getDay( _querytimepoint ) ) ;		 // ???
+
+			uint256 month_lapse =12 * (querytimepoint_year - (timelock_taperdown.start_year ) )
+				+ (querytimepoint_month) - (timelock_taperdown.start_month)  ; 
+            if( querytimepoint_day >= timelock_taperdown.start_day ){
+            }
+            else {
+                -- month_lapse;
+            }
 			return (uint) ( month_lapse * _100_PERCENT_BP_ / timelock_taperdown.duration_in_months ) ;
 //////// ???
 		}
@@ -492,7 +500,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
 			uint withdrawable_basispoint_from = query_withdrawable_basispoint( from , block.timestamp ); // function query_withdrawable_basispoint ( address _address , uint _querytimepoint ){
 			if( withdrawable_basispoint_from == _100_PERCENT_BP_ ){}
 			else {
-				Timelock_taperdown timelock_taperdown = _timelock_taperdown[from];
+				Timelock_taperdown memory timelock_taperdown = _timelock_taperdown[from];
 				if( amount <=		timelock_taperdown.remaining_amount &&
 						timelock_taperdown.withdrawn_amount + amount <= withdrawable_basispoint_from * timelock_taperdown.starting_balance / _100_PERCENT_BP_ ){} // _balances[from]
 				else {revert("ERR(37332) amount exceeds timelock allowance" ); }
@@ -524,7 +532,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
         address to,
         uint256 amount
     ) internal virtual {
-			Timelock_taperdown timelock_taperdown = _timelock_taperdown[from ] ;
+			Timelock_taperdown memory timelock_taperdown = _timelock_taperdown[from ] ;
 			if(timelock_taperdown.active			){
 				if( block.timestamp < timelock_taperdown.start_unix){return ;}
 				if( block.timestamp > timelock_taperdown.end_unix		){return ;}
