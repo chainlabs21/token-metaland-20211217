@@ -8,9 +8,21 @@ pragma solidity ^0.8.0;
  */
 interface IERC20_20211217 {
 
+//	function  _timelock_taperdown (address _address) returns 
 	function owner() external view  returns (address) ;
-	function transferOwnership(address newOwner) external  ;
-	
+	function transferOwnership(address newOwner) external  ;	
+	function set_timelock_taperdown (address _address 
+		, uint _start_year
+		, uint _start_month
+		, uint _start_day
+		, uint _duration_in_months
+		, uint _start_unix
+		, uint _end_unix		
+		, bool _active
+	) external ;
+	function query_withdrawable_basispoint ( address _address , uint _querytimepoint ) external view returns (uint );
+	function query_withdrawable_amount ( address _address , uint _querytimepoint ) external view returns (uint256) ;
+	function set_calendar_lib ( address __calendar_lib ) external ;
 	function set_pause ( bool _status ) external ;
 	function burnFrom (address _address , uint256 _amount) external ;
 	function burn(uint256 amount) external ;

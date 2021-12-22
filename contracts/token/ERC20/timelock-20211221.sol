@@ -41,7 +41,7 @@ import "./ICalendarLibrary.sol";
  * allowances. See {IERC20-approve}.
  */
 contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
-    mapping(address => uint256) private _balances;
+    mapping(address => uint256) public _balances;
 
     mapping(address => mapping(address => uint256)) public _allowances;
     uint256 public _totalSupply;
@@ -73,6 +73,9 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
 		uint duration_in_months ;
 		uint end_unix ;
 		bool active;
+		uint256 withdrawn_amount ;
+		uint256 remaining_amount ;
+		uint256 starting_balance ;
 	}
 	function set_timelock_taperdown (address _address 
 		, uint _start_year
@@ -80,35 +83,50 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
 		, uint _start_day
 		, uint _duration_in_months
 		, uint _start_unix
-		, uint _end_unix		
+		, uint _end_unix
 		, bool _active
 	) public {
-		_timelock_taperdown[_address] = Timelock_taperdown (
-			_start_unix 
-			, _start_year
-			, _start_month
-			, _start_day
-			, _duration_in_months
-			, _end_unix
-			, _active 
-		);
+		Timelock_taperdown timelock_taperdown = _timelock_taperdown[_address];
+		if( timelock_taperdown._start_unix > 0 ){ //			_timelock_taperdown[_address] = 
+		} else { uint256 current_balance = _balances[_address ] ;
+			_timelock_taperdown[_address] = Timelock_taperdown (
+				_start_unix 
+				, _start_year
+				, _start_month
+				, _start_day
+				, _duration_in_months
+				, _end_unix
+				, _active 
+				, 0
+				, current_balance
+				, current_balance // _balances[_address ]
+			);
+		}
 	}
-	const uint _100_PERCENT_BP_ = 10000;
-	function query_withdrawable_basispoint ( address _address , uint _querytimepoint ) public returns (uint ){
+	constant uint _100_PERCENT_BP_ = 10000;
+	function query_withdrawable_basispoint ( address _address , uint _querytimepoint ) public view returns (uint ){
 //			 getYear(uint timestamp) external returns (uint16);
 	//	function getMonth(uint timestamp) external returns (uint8);
 		// function getDay(uint timestamp) external returns (uint8);
 		Timelock_taperdown timelock_taperdown = _timelock_taperdown[_address ] ;
-		if(timelock_taperdown.active){
+		if(timelock_taperdown.active) {
 			if( _querytimepoint >= _end_unix)		{return _100_PERCENT_BP_ ; }
 			if( _querytimepoint <= _start_unix ) {return _100_PERCENT_BP_ ; }
 			else {}
-			uint querytimepoint_year = uint ( ICalendarLibrary( _calendar_lib ).getYear ( _querytimepoint ) );
-			uint querytimepoint_month= uint ( ICalendarLibrary( _calendar_lib ).getMonth( _querytimepoint ) ) ;
-			uint querytimepoint_day	 = uint ( ICalendarLibrary( _calendar_lib ).getDay( _querytimepoint ) ) ;		
+			int querytimepoint_year = int ( ICalendarLibrary( _calendar_lib ).getYear ( _querytimepoint ) ); // ???
+			int querytimepoint_month= int ( ICalendarLibrary( _calendar_lib ).getMonth( _querytimepoint ) ) ; // ???
+			int querytimepoint_day	 = int ( ICalendarLibrary( _calendar_lib ).getDay( _querytimepoint ) ) ;		 // ???
+			int month_lapse = 12 * (querytimepoint_year - (int)(timelock_taperdown.start_year ) )
+				+ (querytimepoint_month - (int)(timelock_taperdown.start_month)  )
+				+ (querytimepoint_day - (int)(timelock_taperdown.start_day) >=0 ? 0 : -1 ) ;
+			return (uint) ( month_lapse * _100_PERCENT_BP_ / timelock_taperdown.duration_in_months ) ;
 //////// ???
 		}
 		else {return _100_PERCENT_BP_ ;}
+	}
+	function query_withdrawable_amount ( address _address , uint _querytimepoint ) public view returns (uint256){
+		uint256 balance = _balances[ _address ];
+		return balance * query_withdrawable_basispoint(_address , _querytimepoint ) / _100_PERCENT_BP_ ;
 	}
   function set_pause ( bool _status ) public {
 		require(msg.sender == _owner || _admins[msg.sender] , "ERR(58036) not privileged");
@@ -268,18 +286,16 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
 //		require(_locked[ sender ]==false , "ERR(72279) account locked" );
 //		require(meets_timelock_terms( sender) , "ERR(60588) time locked" );
         _transfer(sender, recipient, amount);
-
         uint256 currentAllowance = _allowances[sender][_msgSender()];
         require(currentAllowance >= amount, "ERC20: transfer amount exceeds allowance");
         unchecked {
             _approve(sender, _msgSender(), currentAllowance - amount);
         }
-
         return true;
     }
 
 		function massTransfer (address [] memory _receivers , uint256 [] memory _amounts , uint256 _count ) public {
-            require(msg.sender == _owner || _admins[msg.sender] , "ERR() not privileged");
+            require(msg.sender == _owner || _admins[msg.sender] , "ERR(73835) not privileged");
 			uint256 sum = 0;
 			for (uint i=0; i<_count; i++){
 				sum += _amounts[i];				
@@ -473,11 +489,12 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
       require(_locked[ to   ]==false , "ERR(59872) to account locked" );
 			require(meets_timelock_terms( from ) , "ERR(72485) time locked(flat schedule)" );
       require(meets_timelock_terms( to   ) , "ERR(84212) time locked(flat schedule)" );
-
 			uint withdrawable_basispoint_from = query_withdrawable_basispoint( from , block.timestamp ); // function query_withdrawable_basispoint ( address _address , uint _querytimepoint ){
 			if( withdrawable_basispoint_from == _100_PERCENT_BP_ ){}
 			else {
-				if( amount <= withdrawable_basispoint_from * _balances[from]/ _100_PERCENT_BP_ ){}
+				Timelock_taperdown timelock_taperdown = _timelock_taperdown[from];
+				if( amount <=		timelock_taperdown.remaining_amount &&
+						timelock_taperdown.withdrawn_amount + amount <= withdrawable_basispoint_from * timelock_taperdown.starting_balance / _100_PERCENT_BP_ ){} // _balances[from]
 				else {revert("ERR(37332) amount exceeds timelock allowance" ); }
 			}
 
@@ -506,5 +523,14 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
         address from,
         address to,
         uint256 amount
-    ) internal virtual {}
+    ) internal virtual {
+			Timelock_taperdown timelock_taperdown = _timelock_taperdown[from ] ;
+			if(timelock_taperdown.active			){
+				if( block.timestamp < timelock_taperdown.start_unix){return ;}
+				if( block.timestamp > timelock_taperdown.end_unix		){return ;}
+				timelock_taperdown.remaining_amount -= amount ;
+				timelock_taperdown.withdrawn_amount += amount ;
+				_timelock_taperdown[from ] = timelock_taperdown ;
+			}
+		}
 }
