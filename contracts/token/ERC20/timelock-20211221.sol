@@ -103,7 +103,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata , Ownable {
 			);
 		}
 	}
-	constant uint _100_PERCENT_BP_ = 10000;
+	 uint _100_PERCENT_BP_ = 10000;
 	function query_withdrawable_basispoint ( address _address , uint _querytimepoint ) public view returns (uint ){
 //			 getYear(uint timestamp) external returns (uint16);
 	//	function getMonth(uint timestamp) external returns (uint8);
