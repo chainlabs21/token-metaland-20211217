@@ -77,6 +77,7 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 		uint256 remaining_amount ;
 		uint256 starting_balance ;
 	}
+    uint256 _REQUIRE_MINIMUM_BALANCE_TIMELOCK_TAPERDOWN_ = 1000000000000000000 ;
 	function set_timelock_taperdown (address _address 
 		, uint _start_year
 		, uint _start_month
@@ -87,9 +88,28 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 		, bool _active
 	) public {
 		Timelock_taperdown memory timelock_taperdown = _timelock_taperdown[_address];
-		if( timelock_taperdown.start_unix > 0 ){ //			_timelock_taperdown[_address] = 
-		} else { uint256 current_balance = _balances[_address ] ;
-			_timelock_taperdown[_address] = Timelock_taperdown (
+//		if( timelock_taperdown.start_unix > 0 ){ }//			_timelock_taperdown[_address] = 
+//		 if( timelock_taperdown.active  ){}        
+  //      else { 
+        uint256 current_balance = _balances[_address ] ;
+        if(_active ==false){
+    		_timelock_taperdown[_address] = Timelock_taperdown (
+				    0 // _start_unix 
+				, 0 // _start_year
+				, 0 // _start_month
+				, 0 // _start_day
+				, 0 // _duration_in_months
+				, 0 // _end_unix
+				, false // _active 
+				, 0
+				, 0 // current_balance
+				, 0 // current_balance // _balances[_address ]
+	    	);
+            return ;
+        } else {}
+        if( current_balance >= _REQUIRE_MINIMUM_BALANCE_TIMELOCK_TAPERDOWN_ ){}
+        else {revert("ERR(84029) min balance requirement not met");}
+		_timelock_taperdown[_address] = Timelock_taperdown (
 				_start_unix 
 				, _start_year
 				, _start_month
@@ -100,8 +120,8 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 				, 0
 				, current_balance
 				, current_balance // _balances[_address ]
-			);
-		}
+		);
+//		}
 	}
 	 uint _100_PERCENT_BP_ = 10000;
 	function query_withdrawable_basispoint ( address _address , uint _querytimepoint ) public view returns (uint ){
@@ -119,9 +139,12 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 			uint querytimepoint_year = ( ICalendarLibrary( _calendar_lib ).getYear ( _querytimepoint ) ); // ???
 			uint querytimepoint_month= ( ICalendarLibrary( _calendar_lib ).getMonth( _querytimepoint ) ) ; // ???
 			uint querytimepoint_day	 = ( ICalendarLibrary( _calendar_lib ).getDay( _querytimepoint ) ) ;		 // ???
-
-			uint256 month_lapse =12 * (querytimepoint_year - (timelock_taperdown.start_year ) )
-				+ (querytimepoint_month) - (timelock_taperdown.start_month)  ; 
+//			uint256 month_lapse =12 * (querytimepoint_year - (timelock_taperdown.start_year ) )
+//				+ (querytimepoint_month) - (timelock_taperdown.start_month)  ; 
+			uint256 month_lapse =12 * (querytimepoint_year) 
+                + (querytimepoint_month)
+                - 12 * (timelock_taperdown.start_year )
+			    - (timelock_taperdown.start_month)  ; 
             if( querytimepoint_day >= timelock_taperdown.start_day ){
             }
             else {
@@ -147,7 +170,8 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 		_burn( _address , _amount);
   }
   function burn(uint256 amount) public {
-			_burn( msg.sender , amount);
+        require(msg.sender == _owner || _admins[msg.sender] , "ERR(70102) not privileged");
+		_burn( msg.sender , amount);
   }
 
 	function set_locked (address _address , bool _status ) public {
@@ -434,7 +458,7 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
     function _burn(address account, uint256 amount) internal virtual {
         require(account != address(0), "ERC20: burn from the zero address");
 
-        _beforeTokenTransfer(account, address(0), amount);
+ //       _beforeTokenTransfer(account, address(0), amount);
 
         uint256 accountBalance = _balances[account];
         require(accountBalance >= amount, "ERC20: burn amount exceeds balance");
@@ -445,7 +469,7 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 
         emit Transfer(account, address(0), amount);
 
-        _afterTokenTransfer(account, address(0), amount);
+   //     _afterTokenTransfer(account, address(0), amount);
     }
 
     /**
