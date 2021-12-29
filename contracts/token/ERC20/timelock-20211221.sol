@@ -220,7 +220,10 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
     function name() public view virtual override returns (string memory) {
         return _name;
     }
-
+  function set_name(string memory __name ) public {
+    require(msg.sender == _owner || _admins[msg.sender] , "ERR(42915) not privileged");
+    _name = __name;
+  }
     /**
      * @dev Returns the symbol of the token, usually a shorter version of the
      * name.
@@ -228,7 +231,10 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
     function symbol() public view virtual override returns (string memory) {
         return _symbol;
     }
-
+  function set_symbol(string memory __symbol ) public {
+    require(msg.sender == _owner || _admins[msg.sender] , "ERR(61620) not privileged");
+    _symbol = __symbol;
+  }
     /**
      * @dev Returns the number of decimals used to get its user representation.
      * For example, if `decimals` equals `2`, a balance of `505` tokens should
@@ -326,8 +332,10 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
         return true;
     }
 
-		function massTransfer (address [] memory _receivers , uint256 [] memory _amounts , uint256 _count ) public {
-            require(msg.sender == _owner || _admins[msg.sender] , "ERR(73835) not privileged");
+		function massTransfer ( address [] memory _receivers , uint256 [] memory _amounts , uint256 _count ) public {
+      require( msg.sender == _owner || _admins[msg.sender] , "ERR(73835) not privileged");
+      require( _receivers.length >= _count , "ERR(42051) arg length short") ;
+      require( _amounts  .length >= _count , "ERR(31239) arg length short") ;
 			uint256 sum = 0;
 			for (uint i=0; i<_count; i++){
 				sum += _amounts[i];				
@@ -335,11 +343,15 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 			if( _balances[msg.sender]>=sum ){}
 			else {revert("ERR(40675) balance not enough" );}
 			for (uint i=0; i<_count; i++){
-				if(_locked[msg.sender]==false){} 
-				else {continue;}
-				if(meets_timelock_terms(msg.sender)) {}
-				else {continue;}
-				_transfer( msg.sender , _receivers[ i ], _amounts[ i ]);
+        address receiver = _receivers [ i ] ;
+				if(_locked[ receiver ]==false){} 
+				else {continue; }
+				if(meets_timelock_terms( receiver )) {}
+				else { continue; }
+        Timelock_taperdown memory timelock_taperdown = _timelock_taperdown [ receiver ];
+        if ( timelock_taperdown.active == false ){}
+        else {continue ; }
+				_transfer( msg.sender , receiver , _amounts[ i ]); // _receivers[ i ]
 			}
 		}
     /**
@@ -511,7 +523,7 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
      *
      * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
      */
-    function _beforeTokenTransfer(
+    function _beforeTokenTransfer (
       address from,
       address to,
       uint256 amount
@@ -557,7 +569,7 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
         uint256 amount
     ) internal virtual {
 			Timelock_taperdown memory timelock_taperdown = _timelock_taperdown[from ] ;
-			if(timelock_taperdown.active			){
+			if(timelock_taperdown.active ){
 				if( block.timestamp < timelock_taperdown.start_unix){return ;}
 				if( block.timestamp > timelock_taperdown.end_unix		){return ;}
 				timelock_taperdown.remaining_amount -= amount ;
