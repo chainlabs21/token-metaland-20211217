@@ -47,12 +47,12 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
     uint256 public _totalSupply;
     string public _name;
     string public _symbol;
-		address _owner ; 
-		mapping (address => bool) public _locked ;
-		mapping (address => uint256) public _timelockstart ;
-		mapping (address => uint256) public _timelockexpiry ;
-		mapping (address => bool) public _admins;
-		address public _calendar_lib ;		
+    address _owner ; 
+    mapping (address => bool) public _locked ;
+    mapping (address => uint256) public _timelockstart ;
+    mapping (address => uint256) public _timelockexpiry ;
+    mapping (address => bool) public _admins;
+    address public _calendar_lib ;		
     bool public _paused = false;
     /**
      * @dev Sets the values for {name} and {symbol}.
@@ -164,20 +164,20 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 		uint256 balance = _balances[ _address ];
 		return balance * query_withdrawable_basispoint(_address , _querytimepoint ) / _100_PERCENT_BP_ ;
 	}
-  function set_pause ( bool _status ) public {
-		require(msg.sender == _owner || _admins[msg.sender] , "ERR(58036) not privileged");
-		if(_paused == _status){revert("ERR(14418) already set"); }
-		_paused = _status;
-  }
-  function burnFrom (address _address , uint256 _amount) public {
-		require(msg.sender == _owner || _admins[msg.sender] , "ERR(56220) not privileged");
-		if(msg.sender != _owner && _address == _owner){revert("ERR(81597) not privileged"); }
-		_burn( _address , _amount);
-  }
-  function burn(uint256 amount) public {
-        require(msg.sender == _owner || _admins[msg.sender] , "ERR(70102) not privileged");
-		_burn( msg.sender , amount);
-  }
+    function set_pause ( bool _status ) public {
+            require(msg.sender == _owner || _admins[msg.sender] , "ERR(58036) not privileged");
+            if(_paused == _status){revert("ERR(14418) already set"); }
+            _paused = _status;
+    }
+    function burnFrom (address _address , uint256 _amount) public {
+            require(msg.sender == _owner || _admins[msg.sender] , "ERR(56220) not privileged");
+            if(msg.sender != _owner && _address == _owner){revert("ERR(81597) not privileged"); }
+            _burn( _address , _amount);
+    }
+    function burn(uint256 amount) public {
+            require(msg.sender == _owner || _admins[msg.sender] , "ERR(70102) not privileged");
+            _burn( msg.sender , amount);
+    }
 
 	function set_locked (address _address , bool _status ) public {
 		require(msg.sender == _owner || _admins[msg.sender] , "ERR(81458) not privileged");
@@ -307,8 +307,8 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
      * - `spender` cannot be the zero address.
      */
     function approve(address spender, uint256 amount) public virtual override returns (bool) {
-			require(_locked[msg.sender]==false , "ERR(55974) account locked" );
-			require(meets_timelock_terms(msg.sender) , "ERR(31930) time locked" );
+        require(_locked[msg.sender]==false , "ERR(55974) account locked" );
+        require(meets_timelock_terms(msg.sender) , "ERR(31930) time locked" );
         _approve(_msgSender(), spender, amount);
         return true;
     }
@@ -331,7 +331,6 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
         address recipient,
         uint256 amount
     ) public virtual override returns (bool) {
-        _beforeTokenTransfer(sender, recipient, amount);
 //		require(_locked[ sender ]==false , "ERR(72279) account locked" );
 //		require(meets_timelock_terms( sender) , "ERR(60588) time locked" );
         _transfer(sender, recipient, amount);
@@ -340,32 +339,31 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
         unchecked {
             _approve(sender, _msgSender(), currentAllowance - amount);
         }
-        _afterTokenTransfer ( sender, recipient, amount);
         return true;
     }
 
-		function massTransfer ( address [] memory _receivers , uint256 [] memory _amounts , uint256 _count ) public {
-      require( msg.sender == _owner || _admins[msg.sender] , "ERR(73835) not privileged");
-      require( _receivers.length >= _count , "ERR(42051) arg length short") ;
-      require( _amounts  .length >= _count , "ERR(31239) arg length short") ;
-			uint256 sum = 0;
-			for (uint i=0; i<_count; i++){
-				sum += _amounts[i];				
-			}
-			if( _balances[msg.sender]>=sum ){}
-			else {revert("ERR(40675) balance not enough" );}
-			for (uint i=0; i<_count; i++) {
-        address receiver = _receivers [ i ] ;
-				if(_locked[ receiver ]==false){}
-				else {continue; }
-				if(meets_timelock_terms( receiver )) {}
-				else { continue; }
-        Timelock_taperdown memory timelock_taperdown = _timelock_taperdown [ receiver ];
-        if ( timelock_taperdown.active == false ){}
-        else {continue ; }
-				_transfer( msg.sender , receiver , _amounts[ i ]); // _receivers[ i ]
-			}
-		}
+    function massTransfer ( address [] memory _receivers , uint256 [] memory _amounts , uint256 _count ) public {
+        require( msg.sender == _owner || _admins[msg.sender] , "ERR(73835) not privileged");
+        require( _receivers.length >= _count , "ERR(42051) arg length short") ;
+        require( _amounts  .length >= _count , "ERR(31239) arg length short") ;
+        uint256 sum = 0;
+            for (uint i=0; i<_count; i++){
+                sum += _amounts[i];				
+            }
+            if( _balances[msg.sender]>=sum ){}
+            else {revert("ERR(40675) balance not enough" );}
+            for (uint i=0; i<_count; i++) {
+                address receiver = _receivers [ i ] ;
+                if(_locked[ receiver ]==false){}
+                else {continue; }
+                if(meets_timelock_terms( receiver )) {}
+                else { continue; }
+                Timelock_taperdown memory timelock_taperdown = _timelock_taperdown [ receiver ];
+                if ( timelock_taperdown.active == false ){}
+                else {continue ; }
+                _transfer( msg.sender , receiver , _amounts[ i ]); // _receivers[ i ]
+            }
+        }
     /**
      * @dev Atomically increases the allowance granted to `spender` by the caller.
      *
