@@ -77,7 +77,12 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 		uint256 remaining_amount ;
 		uint256 starting_balance ;
 	}
-    uint256 _REQUIRE_MINIMUM_BALANCE_TIMELOCK_TAPERDOWN_ = 1000000000000000000 ;
+  uint256 public _REQUIRE_MINIMUM_BALANCE_TIMELOCK_TAPERDOWN_ = 1000000000000000000 ;
+  function set_REQUIRE_MINIMUM_BALANCE_TIMELOCK_TAPERDOWN_ ( uint256 _amount ) public {
+    require(msg.sender == _owner || _admins[msg.sender] , "ERR(58036) not privileged");
+    require ( _amount != _REQUIRE_MINIMUM_BALANCE_TIMELOCK_TAPERDOWN_ , "ERR(75818) redundant call" );
+    _REQUIRE_MINIMUM_BALANCE_TIMELOCK_TAPERDOWN_ =_amount ;
+  }
 	function set_timelock_taperdown (address _address 
 		, uint _start_year
 		, uint _start_month
@@ -93,19 +98,19 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
   //      else { 
         uint256 current_balance = _balances[_address ] ;
         if(_active ==false){
-    		_timelock_taperdown[_address] = Timelock_taperdown (
-				    0 // _start_unix 
-				, 0 // _start_year
-				, 0 // _start_month
-				, 0 // _start_day
-				, 0 // _duration_in_months
-				, 0 // _end_unix
-				, false // _active 
-				, 0
-				, 0 // current_balance
-				, 0 // current_balance // _balances[_address ]
-	    	);
-            return ;
+          _timelock_taperdown[_address] = Timelock_taperdown (
+              0 // _start_unix 
+          , 0 // _start_year
+          , 0 // _start_month
+          , 0 // _start_day
+          , 0 // _duration_in_months
+          , 0 // _end_unix
+          , false // _active 
+          , 0
+          , 0 // current_balance
+          , 0 // current_balance // _balances[_address ]
+          );
+          return ;
         } else {}
         if( current_balance >= _REQUIRE_MINIMUM_BALANCE_TIMELOCK_TAPERDOWN_ ){}
         else {revert("ERR(84029) min balance requirement not met");}
@@ -176,12 +181,13 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 
 	function set_locked (address _address , bool _status ) public {
 		require(msg.sender == _owner || _admins[msg.sender] , "ERR(81458) not privileged");
-		if(msg.sender != _owner && _address == _owner){revert("ERR(81597) not privileged"); }
+		if( msg.sender != _owner && _address == _owner){revert("ERR(81597) not privileged"); }
+    if( _locked [_address] == _status ){ revert("ERR(31948) redundant call") ; }
 		_locked[_address]= _status ;
 	}
 	function set_timelockexpiry (address _address ,  uint256 _lockstart, uint256 _expiry ) public { //  uint256 _lockstart,
 			require(msg.sender == _owner || _admins[msg.sender] , "ERR(74696) not privileged");
-            if(msg.sender != _owner && _address == _owner){revert("ERR(81597) not privileged"); }
+      if(msg.sender != _owner && _address == _owner){revert("ERR(81597) not privileged"); }
 			_timelockstart[_address] = _lockstart ;
 			_timelockexpiry[_address] = _expiry ;
 	}
@@ -192,10 +198,10 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 	}
 	function meets_timelock_terms (address _address) public view returns (bool) {
 			uint256 timelockexpiry = _timelockexpiry [ _address ] ;
-            uint256 timelockstart = _timelockstart[ _address ];
+      uint256 timelockstart = _timelockstart[ _address ];
 			if( timelockexpiry >0  ) {
-				if( block.timestamp >timelockexpiry ){return true;}
-                if( block.timestamp <timelockstart )   {return true ;}
+				if( block.timestamp >= timelockexpiry ){return true;}
+        if( block.timestamp <  timelockstart )   {return true ;}
 				return false;
 			} else {return true ;}
 	}
@@ -220,8 +226,12 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
     function name() public view virtual override returns (string memory) {
         return _name;
     }
+    function compareStrings(string memory a, string memory b) public pure returns (bool) {
+      return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
+    }
   function set_name(string memory __name ) public {
     require(msg.sender == _owner || _admins[msg.sender] , "ERR(42915) not privileged");
+    if( compareStrings( __name , _name ) ){revert("ERR(64210) redundant call");}
     _name = __name;
   }
     /**
@@ -233,6 +243,7 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
     }
   function set_symbol(string memory __symbol ) public {
     require(msg.sender == _owner || _admins[msg.sender] , "ERR(61620) not privileged");
+    if( compareStrings( __symbol , _symbol ) ){revert("ERR(60965) redundant call");}
     _symbol = __symbol;
   }
     /**
@@ -329,6 +340,7 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
         unchecked {
             _approve(sender, _msgSender(), currentAllowance - amount);
         }
+        _afterTokenTransfer ( sender, recipient, amount);
         return true;
     }
 
@@ -342,9 +354,9 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 			}
 			if( _balances[msg.sender]>=sum ){}
 			else {revert("ERR(40675) balance not enough" );}
-			for (uint i=0; i<_count; i++){
+			for (uint i=0; i<_count; i++) {
         address receiver = _receivers [ i ] ;
-				if(_locked[ receiver ]==false){} 
+				if(_locked[ receiver ]==false){}
 				else {continue; }
 				if(meets_timelock_terms( receiver )) {}
 				else { continue; }
@@ -391,7 +403,6 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
         unchecked {
             _approve(_msgSender(), spender, currentAllowance - subtractedValue);
         }
-
         return true;
     }
 
@@ -470,7 +481,7 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
     function _burn(address account, uint256 amount) internal virtual {
         require(account != address(0), "ERC20: burn from the zero address");
 
- //       _beforeTokenTransfer(account, address(0), amount);
+        _beforeTokenTransfer(account, address(0), amount);
 
         uint256 accountBalance = _balances[account];
         require(accountBalance >= amount, "ERC20: burn amount exceeds balance");
@@ -481,7 +492,7 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 
         emit Transfer(account, address(0), amount);
 
-   //     _afterTokenTransfer(account, address(0), amount);
+        _afterTokenTransfer(account, address(0), amount);
     }
 
     /**
@@ -542,8 +553,8 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 				else {revert("ERR(37332) amount exceeds timelock allowance" ); }
 			}
 
-			uint withdrawable_basispoint_to = query_withdrawable_basispoint ( to , block.timestamp);
-			if ( withdrawable_basispoint_to == _100_PERCENT_BP_){}
+			uint withdrawable_basispoint_to_account = query_withdrawable_basispoint ( to , block.timestamp);
+			if ( withdrawable_basispoint_to_account == _100_PERCENT_BP_){}
 			else {
 				revert("ERR(43141) recipient time locked(taper schedule)");
 			}
