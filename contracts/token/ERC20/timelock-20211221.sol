@@ -53,7 +53,7 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
 		mapping (address => uint256) public _timelockexpiry ;
 		mapping (address => bool) public _admins;
 		address public _calendar_lib ;		
-    bool _paused = false;
+    bool public _paused = false;
     /**
      * @dev Sets the values for {name} and {symbol}.
      *
