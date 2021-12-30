@@ -47,7 +47,7 @@ contract ERC20Metaland is Context, IERC20, IERC20Metadata , Ownable {
     uint256 public _totalSupply;
     string public _name;
     string public _symbol;
-    address _owner ; 
+    address public _owner ; 
     mapping (address => bool) public _locked ;
     mapping (address => uint256) public _timelockstart ;
     mapping (address => uint256) public _timelockexpiry ;
